@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SyllabiQ — Autonomous Academic Planner Agent</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <style>
+    body { background-color: #0B1120; color: #F8FAFC; font-family: 'Inter', system-ui, sans-serif; }
+    .gradient-text {
+      background: linear-gradient(90deg, #6366F1, #06B6D4);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .agent-log {
+      background: #0F172A;
+      border-left: 3px solid #38BDF8;
+      font-family: 'Fira Code', monospace;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Top Navbar -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-20">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <h1 class="text-2xl font-extrabold gradient-text">🎓 SyllabiQ</h1>
+        <p class="text-xs text-slate-400">Autonomous Academic & Syllabus Tracker Agent</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <input
+          id="apiKeyInput"
+          type="password"
+          placeholder="Paste Gemini API Key (aistudio.google.com)"
+          class="bg-slate-800 border border-slate-700 text-sm rounded-lg px-3 py-2 w-72 text-white focus:outline-none focus:border-cyan-400"
+        />
+        <span id="keyStatus" class="text-xs text-amber-400">⚠️ Key Required</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="max-w-7xl mx-auto w-full px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
+    
+    <!-- Left Column: Inputs -->
+    <section class="lg:col-span-5 space-y-5">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-bold text-white">1️⃣ Syllabus & Constraints</h2>
+          <button
+            onclick="loadSampleSyllabus()"
+            class="text-xs bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 px-2.5 py-1 rounded-md transition"
+          >
+            Load MAKAUT Sample
+          </button>
+        </div>
+
+        <!-- Exam Date & Daily Hours -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Target Exam Date</label>
+            <input
+              id="examDateInput"
+              type="date"
+              class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
+            />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Daily Study Hours</label>
+            <input
+              id="dailyHoursInput"
+              type="number"
+              min="1"
+              max="12"
+              step="0.5"
+              value="2.5"
+              class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
+            />
+          </div>
+        </div>
+
+        <!-- PDF Upload -->
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Upload Syllabus PDF (Optional)</label>
+          <input
+            id="pdfUpload"
+            type="file"
+            accept=".pdf"
+            onchange="handlePdfUpload(event)"
+            class="block w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-cyan-400 hover:file:bg-slate-700"
+          />
+        </div>
+
+        <!-- Syllabus Textarea -->
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Syllabus Modules / Topics</label>
+          <textarea
+            id="syllabusInput"
+            rows="10"
+            placeholder="Paste your university syllabus modules here or click 'Load MAKAUT Sample'..."
+            class="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-400"
+          ></textarea>
+        </div>
+
+        <button
+          id="launchBtn"
+          onclick="runAutonomousAgent()"
+          class="w-full bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white font-bold py-3 rounded-lg shadow-lg transition flex items-center justify-center gap-2"
+        >
+          🚀 Launch Autonomous Agent
+        </button>
+      </div>
+
+      <!-- Agent Architecture Badge -->
+      <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 text-xs text-slate-400 space-y-1">
+        <p class="font-semibold text-slate-300">🤖 Autonomous Tool-Use Pipeline:</p>
+        <p>• <b>Tool 1:</b> <code>calculate_study_timeline</code> (Pacing + 20% Recall Buffer)</p>
+        <p>• <b>Tool 2:</b> <code>search_study_resources</code> (Live Web & Docs Retrieval)</p>
+        <p>• <b>Output:</b> Interactive Checklist + <code>.md</code> & <code>.ics</code> Calendar Export</p>
+      </div>
+    </section>
+
+    <!-- Right Column: Agent Logs & Output -->
+    <section class="lg:col-span-7 space-y-5">
+      <!-- Live Agent Execution Console -->
+      <div id="agentConsole" class="bg-slate-900 border border-slate-800 rounded-xl p-5 hidden">
+        <h3 class="text-sm font-bold text-cyan-400 mb-3 flex items-center gap-2">
+          <span class="animate-pulse">●</span> Agent Autonomous Reasoning & Tool Calls
+        </h3>
+        <div id="logContainer" class="space-y-2 max-h-56 overflow-y-auto text-xs"></div>
+      </div>
+
+      <!-- Final Generated Study Plan -->
+      <div id="planContainer" class="space-y-4">
+        <div class="bg-slate-900/50 border border-dashed border-slate-800 rounded-xl p-12 text-center text-slate-500">
+          <p class="text-lg font-semibold text-slate-400 mb-1">Ready to Plan Your Semester</p>
+          <p class="text-sm">Enter your Gemini API Key above, load a syllabus, and launch the agent.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // Configure PDF.js worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    // Set default exam date (+28 days)
+    const defaultDate = new Date();
+    defaultDate.setDate(defaultDate.getDate() + 28);
+    document.getElementById('examDateInput').value = defaultDate.toISOString().split('T')[0];
+
+    // API Key persistence in localStorage
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    const keyStatus = document.getElementById('keyStatus');
+    const savedKey = localStorage.getItem('syllabiq_gemini_key');
+    if (savedKey) {
+      apiKeyInput.value = savedKey;
+      keyStatus.textContent = '✅ Key Saved';
+      keyStatus.className = 'text-xs text-emerald-400';
+    }
+    apiKeyInput.addEventListener('input', () => {
+      const val = apiKeyInput.value.trim();
+      localStorage.setItem('syllabiq_gemini_key', val);
+      keyStatus.textContent = val ? '✅ Key Ready' : '⚠️ Key Required';
+      keyStatus.className = val ? 'text-xs text-emerald-400' : 'text-xs text-amber-400';
+    });
+
+    function loadSampleSyllabus() {
+      document.getElementById('syllabusInput').value = `Subject: Data Structures & Algorithms (PCC-CS301) - MAKAUT B.Tech CSE / IoT
+Module 1: Introduction & Asymptotic Analysis (6L)
+Time and space complexity, Big-O, Omega, Theta notations, Recurrence relations, Master Theorem.
+Module 2: Linear Data Structures (10L)
+Arrays, Linked Lists (Singly, Doubly, Circular), Stacks, Infix to Postfix conversion, Queues, Circular Queue, Priority Queue.
+Module 3: Trees & Graph Algorithms (12L)
+Binary Search Trees (BST), AVL Trees, B-Trees, Graph representations (Adjacency Matrix/List), BFS, DFS, Dijkstra's Shortest Path, Kruskal's & Prim's MST.
+Module 4: Sorting & Hashing (8L)
+Quick Sort, Merge Sort, Heap Sort, Radix Sort, Hash functions, Collision resolution (Chaining, Open Addressing).`;
+    }
+
+    async function handlePdfUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let fullText = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        fullText += content.items.map(item => item.str).join(' ') + '\n';
+      }
+      document.getElementById('syllabusInput').value = fullText.trim();
+    }
+
+    function appendLog(html) {
+      const consoleBox = document.getElementById('agentConsole');
+      const logContainer = document.getElementById('logContainer');
+      consoleBox.classList.remove('hidden');
+      const div = document.createElement('div');
+      div.className = 'agent-log p-2.5 rounded text-slate-200';
+      div.innerHTML = html;
+      logContainer.appendChild(div);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    // ==========================================
+    // AGENT TOOLS (EXECUTED AUTONOMOUSLY)
+    // ==========================================
+    function calculateStudyTimeline({ exam_date, total_modules }) {
+      const today = new Date();
+      const target = new Date(exam_date);
+      let daysLeft = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+      if (isNaN(daysLeft) || daysLeft <= 0) daysLeft = 14;
+
+      const totalWeeks = Math.max(1, Math.floor(daysLeft / 7));
+      const revisionDays = Math.max(2, Math.floor(daysLeft * 0.2));
+      const activeStudyDays = Math.max(1, daysLeft - revisionDays);
+      const daysPerModule = +(activeStudyDays / Math.max(1, total_modules)).toFixed(1);
+
+      return {
+        today: today.toISOString().split('T')[0],
+        exam_date,
+        days_remaining: daysLeft,
+        recommended_weeks: totalWeeks,
+        active_study_days: activeStudyDays,
+        final_revision_buffer_days: revisionDays,
+        days_per_module: daysPerModule
+      };
+    }
+
+    async function searchStudyResources({ query }) {
+      try {
+        // Query Wikipedia API (CORS-safe open knowledge endpoint) + Curated Study Search Links
+        const wikiUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(query)}&limit=3&namespace=0&format=json&origin=*`;
+        const res = await fetch(wikiUrl);
+        const data = await res.json();
+        const results = [];
+        if (data && data[1]) {
+          for (let i = 0; i < data[1].length; i++) {
+            results.push({
+              title: `${data[1][i]} — Reference Concept`,
+              url: data[3][i],
+              source_type: 'Encyclopedia / Core Theory'
+            });
+          }
+        }
+        // Also append direct targeted GeeksforGeeks & YouTube lecture search links
+        results.push({
+          title: `${query} — GeeksforGeeks Notes & Code`,
+          url: `https://www.geeksforgeeks.org/search/?gq=${encodeURIComponent(query)}`,
+          source_type: 'Tutorial & Implementation'
+        });
+        results.push({
+          title: `${query} — Video Lectures (YouTube)`,
+          url: `https://www.youtube.com/results?search_query=${encodeURIComponent(query + ' lecture tutorial')}`,
+          source_type: 'Video Lecture'
+        });
+        return { resources: results };
+      } catch (err) {
+        return {
+          resources: [{
+            title: `${query} — Study Guide`,
+            url: `https://www.geeksforgeeks.org/search/?gq=${encodeURIComponent(query)}`,
+            source_type: 'Web Search'
+          }]
+        };
+      }
+    }
+
+    // ==========================================
+    // AUTONOMOUS AGENT LOOP (GEMINI FUNCTION CALLING)
+    // ==========================================
+    async function runAutonomousAgent() {
+      const apiKey = apiKeyInput.value.trim();
+      const syllabus = document.getElementById('syllabusInput').value.trim();
+      const examDate = document.getElementById('examDateInput').value;
+      const dailyHours = document.getElementById('dailyHoursInput').value;
+
+      if (!apiKey) return alert('Please paste your Gemini API Key at the top right.');
+      if (!syllabus) return alert('Please paste your syllabus or click "Load MAKAUT Sample".');
+
+      const btn = document.getElementById('launchBtn');
+      btn.disabled = true;
+      btn.innerHTML = '⏳ Agent Running Autonomous Loop...';
+      document.getElementById('logContainer').innerHTML = '';
+
+      const systemPrompt = `You are SyllabiQ, an Autonomous Academic Planning Agent.
+Your workflow:
+1. Count the modules in the syllabus and call \`calculate_study_timeline\` with exam_date and total_modules.
+2. For each module/topic, call \`search_study_resources\` to gather study notes, docs, and video links.
+3. Once tools return results, output ONLY raw valid JSON (no markdown fences) matching this exact schema:
+{
+  "course_title": "Course Name",
+  "strategy_summary": "Strategic pacing advice",
+  "weeks": [
+    {
+      "week_number": 1,
+      "theme": "Module Theme",
+      "hours_allocated": 10,
+      "subtopics": ["Topic 1", "Topic 2"],
+      "daily_tasks": [
+        {"day": "Day 1-2", "task": "Specific action item", "type": "Learn"},
+        {"day": "Day 3-4", "task": "Practice problems", "type": "Practice"},
+        {"day": "Day 5", "task": "Revision & active recall", "type": "Revise"}
+      ],
+      "resources": [
+        {"title": "Resource Title", "url": "https://...", "source_type": "Notes"}
+      ]
+    }
+  ]
+}`;
+
+      const toolsDeclaration = [{
+        functionDeclarations: [
+          {
+            name: 'calculate_study_timeline',
+            description: 'Calculates remaining days, weeks, and study pacing until the target exam date.',
+            parameters: {
+              type: 'OBJECT',
+              properties: {
+                exam_date: { type: 'STRING', description: 'YYYY-MM-DD exam date' },
+                total_modules: { type: 'INTEGER', description: 'Number of syllabus modules' }
+              },
+              required: ['exam_date', 'total_modules']
+            }
+          },
+          {
+            name: 'search_study_resources',
+            description: 'Searches for notes, documentation, and lecture links for an academic topic.',
+            parameters: {
+              type: 'OBJECT',
+              properties: {
+                query: { type: 'STRING', description: 'Academic topic or subtopic search query' }
+              },
+              required: ['query']
+            }
+          }
+        ]
+      }];
+
+      const contents = [{
+        role: 'user',
+        parts: [{
+          text: `Target Exam Date: ${examDate}\nDaily Study Hours: ${dailyHours}\n\nSyllabus:\n${syllabus}`
+        }]
+      }];
+
+      try {
+        let step = 1;
+        while (step <= 10) {
+          appendLog(`🤖 <b>Step ${step}:</b> Agent analyzing state & deciding next action...`);
+
+          const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                contents,
+                tools: toolsDeclaration,
+                generationConfig: { temperature: 0.2 }
+              })
+            }
+          );
+
+          const data = await response.json();
+          if (data.error) throw new Error(data.error.message);
+
+          const candidate = data.candidates[0].content;
+          contents.push(candidate);
+
+          const functionCalls = (candidate.parts || []).filter(p => p.functionCall);
+
+          if (functionCalls.length === 0) {
+            const rawText = candidate.parts.map(p => p.text || '').join('').trim();
+            const cleanJson = rawText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '');
+            const plan = JSON.parse(cleanJson);
+            appendLog(`✅ <b>Complete:</b> Study roadmap & verified resources ready!`);
+            window.currentPlan = plan;
+            renderStudyPlan(plan);
+            break;
+          }
+
+          const functionResponses = [];
+          for (const part of functionCalls) {
+            const { name, args } = part.functionCall;
+            appendLog(`🛠️ <b>Tool Call:</b> <code class="text-cyan-300">${name}(${JSON.stringify(args)})</code>`);
+
+            let result;
+            if (name === 'calculate_study_timeline') {
+              result = calculateStudyTimeline(args);
+            } else if (name === 'search_study_resources') {
+              result = await searchStudyResources(args);
+            } else {
+              result = { error: 'Unknown tool' };
+            }
+
+            functionResponses.push({
+              functionResponse: {
+                name,
+                response: { result }
+              }
+            });
+          }
+
+          contents.push({ role: 'user', parts: functionResponses });
+          step++;
+        }
+      } catch (err) {
+        appendLog(`❌ <b>Error:</b> ${err.message}`);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '🚀 Launch Autonomous Agent';
+      }
+    }
+
+    // ==========================================
+    // RENDER INTERACTIVE CHECKLIST & EXPORTS
+    // ==========================================
+    function renderStudyPlan(plan) {
+      const container = document.getElementById('planContainer');
+      let totalTasks = 0;
+      plan.weeks.forEach(w => totalTasks += (w.daily_tasks || []).length);
+
+      let html = `
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 class="text-xl font-bold text-white">📚 ${plan.course_title}</h2>
+              <p class="text-sm text-slate-400 mt-1">${plan.strategy_summary}</p>
+            </div>
+            <div class="flex gap-2">
+              <button onclick="downloadMarkdown()" class="bg-slate-800 hover:bg-slate-700 text-xs font-semibold px-3 py-2 rounded-lg border border-slate-700">
+                📥 Download .MD
+              </button>
+              <button onclick="downloadICS()" class="bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold px-3 py-2 rounded-lg">
+                📅 Export Calendar (.ICS)
+              </button>
+            </div>
+          </div>
+
+          <!-- Progress Bar -->
+          <div>
+            <div class="flex justify-between text-xs text-slate-400 mb-1">
+              <span>Revision Completion Progress</span>
+              <span id="progressLabel">0 / ${totalTasks} tasks (0%)</span>
+            </div>
+            <div class="w-full bg-slate-800 rounded-full h-2.5">
+              <div id="progressBar" class="bg-gradient-to-r from-indigo-500 to-cyan-400 h-2.5 rounded-full transition-all" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      plan.weeks.forEach((w, wIdx) => {
+        const subtopicsHtml = (w.subtopics || []).map(s => `<span class="bg-slate-800 text-cyan-300 text-xs px-2 py-0.5 rounded">${s}</span>`).join(' ');
+        const tasksHtml = (w.daily_tasks || []).map((t, tIdx) => `
+          <label class="flex items-start gap-2.5 p-2 rounded-lg hover:bg-slate-800/60 cursor-pointer">
+            <input type="checkbox" onchange="updateProgress(${totalTasks})" class="task-checkbox mt-1 accent-cyan-500 w-4 h-4" />
+            <span class="text-sm text-slate-200">
+              <strong class="text-indigo-400">${t.day}</strong>
+              <span class="text-xs uppercase bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded mx-1">${t.type}</span>
+              ${t.task}
+            </span>
+          </label>
+        `).join('');
+
+        const resourcesHtml = (w.resources || []).map(r => `
+          <li>
+            <a href="${r.url}" target="_blank" rel="noopener" class="text-sm text-cyan-400 hover:underline font-medium">
+              🔗 ${r.title}
+            </a>
+            <span class="text-xs text-slate-500 ml-1">(${r.source_type || 'Resource'})</span>
+          </li>
+        `).join('');
+
+        html += `
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+            <div class="flex items-center justify-between">
+              <h3 class="text-base font-bold text-white">🗓️ Week ${w.week_number}: ${w.theme}</h3>
+              <span class="text-xs bg-indigo-500/20 text-indigo-300 px-2.5 py-1 rounded-full font-semibold">${w.hours_allocated} hrs</span>
+            </div>
+            <div class="flex flex-wrap gap-1.5">${subtopicsHtml}</div>
+            <div class="pt-2 border-t border-slate-800">
+              <p class="text-xs font-bold uppercase text-slate-400 mb-1">Actionable Checklist</p>
+              <div class="space-y-1">${tasksHtml}</div>
+            </div>
+            <div class="pt-2 border-t border-slate-800">
+              <p class="text-xs font-bold uppercase text-slate-400 mb-1">Agent-Verified Study Resources</p>
+              <ul class="space-y-1">${resourcesHtml}</ul>
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    function updateProgress(total) {
+      const checked = document.querySelectorAll('.task-checkbox:checked').length;
+      const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
+      document.getElementById('progressBar').style.width = `${pct}%`;
+      document.getElementById('progressLabel').textContent = `${checked} / ${total} tasks (${pct}%)`;
+    }
+
+    function downloadMarkdown() {
+      const plan = window.currentPlan;
+      if (!plan) return;
+      let md = `# 🎓 ${plan.course_title}\n\n**Strategy:** ${plan.strategy_summary}\n\n---\n\n`;
+      plan.weeks.forEach(w => {
+        md += `## Week ${w.week_number}: ${w.theme} (${w.hours_allocated} hrs)\n`;
+        md += `**Subtopics:** ${(w.subtopics || []).join(', ')}\n\n### Checklist\n`;
+        (w.daily_tasks || []).forEach(t => md += `- [ ] **${t.day}** [${t.type}]: ${t.task}\n`);
+        md += `\n### Study Resources\n`;
+        (w.resources || []).forEach(r => md += `- [${r.title}](${r.url})\n`);
+        md += `\n---\n\n`;
+      });
+      triggerDownload(md, 'SyllabiQ_Roadmap.md', 'text/markdown');
+    }
+
+    function downloadICS() {
+      const plan = window.currentPlan;
+      if (!plan) return;
+      let ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//SyllabiQ Agent//EN'];
+      const base = new Date();
+      plan.weeks.forEach((w, idx) => {
+        const start = new Date(base);
+        start.setDate(base.getDate() + idx * 7);
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        const fmt = d => d.toISOString().split('T')[0].replace(/-/g, '');
+        const desc = (w.daily_tasks || []).map(t => `${t.day}: ${t.task}`).join('\\n');
+        ics.push('BEGIN:VEVENT', `DTSTART;VALUE=DATE:${fmt(start)}`, `DTEND;VALUE=DATE:${fmt(end)}`, `SUMMARY:Week ${w.week_number}: ${w.theme}`, `DESCRIPTION:${desc}`, 'END:VEVENT');
+      });
+      ics.push('END:VCALENDAR');
+      triggerDownload(ics.join('\n'), 'SyllabiQ_Schedule.ics', 'text/calendar');
+    }
+
+    function triggerDownload(content, filename, mime) {
+      const blob = new Blob([content], { type: mime });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+    }
+  </script>
+</body>
+</html>
